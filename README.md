@@ -100,7 +100,7 @@ External dependencies: `gcc >=4.6, pin 2.14, cmake 3.13 or higher`
 
 4. Compile zsim: `mkdir build; cd build; cmake ..; make`.
 
-5. Launch a test run: `./zsim tests/simple.cfg`
+5. Launch a test run: `./zsim ../tests/simple.json`
 
 NOTE: zsim uses C++11 features available in `gcc >=4.6` (such as range-based for
 loops, strictly typed enums, lambdas, and type inference). Older version of gcc
