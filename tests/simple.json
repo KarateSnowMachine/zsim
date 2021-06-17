@@ -1,0 +1,36 @@
+{
+    "sys": {
+        "cores": {
+            "simpleCore": {
+                "type": "Simple",
+                "dcache": "l1d",
+                "icache": "l1i"
+            }
+        },
+        "lineSize": 64,
+        "caches": {
+            "l1d": {
+                "size": 65536
+            },
+            "l1i": {
+                "size": 32768
+            },
+            "l2": {
+                "caches": 1,
+                "size": 2097152,
+                "children": "l1i|l1d"
+            }
+        }
+    },
+    "sim": {
+        "phaseLength": 10000,
+        "schedQuantum": 50,
+        "procStatsFilter": "l1.*|l2.*"
+    },
+    "process0": {
+        "command": "ls -alh --color tests/"
+    },
+    "process1": {
+        "command": "cat tests/simple.json"
+    }
+}

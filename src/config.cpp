@@ -24,21 +24,15 @@
  */
 
 #include "config.h"
+#include <fstream>
 #include <sstream>
 #include <string.h>
 #include <string>
 #include <typeinfo>
 #include <vector>
-#include "libconfig.h++"
 #include "log.h"
 
-// We need minor specializations to work with older versions of libconfig
-#if defined(LIBCONFIGXX_VER_MAJOR) && defined(LIBCONFIGXX_VER_MINOR) && defined(LIBCONFIGXX_VER_REVISION)
-#define LIBCONFIG_VERSION (LIBCONFIGXX_VER_MAJOR*10000 +  LIBCONFIGXX_VER_MINOR*100 + LIBCONFIGXX_VER_REVISION)
-#else
-#define LIBCONFIG_VERSION 0
-#endif
-
+using json = nlohmann::json;
 using std::string;
 using std::stringstream;
 using std::vector;
@@ -46,33 +40,55 @@ using std::vector;
 // Restrict use of long long, which libconfig uses as its int64
 typedef long long lc_int64;  // NOLINT(runtime/int)
 
-Config::Config(const char* inFile) {
-    inCfg = new libconfig::Config();
-    outCfg = new libconfig::Config();
-    try {
-        inCfg->readFile(inFile);
-    } catch (libconfig::FileIOException fioe) {
-        panic("Input config file %s could not be read", inFile);
-    } catch (libconfig::ParseException pe) {
-#if LIBCONFIG_VERSION >= 10408 // 1.4.8
-        const char* peFile = pe.getFile();
-#else
-        // Old versions of libconfig don't have libconfig::ParseException::getFile()
-        // Using inFile is typically OK, but won't be accurate with multi-file configs (includes)
-        const char* peFile = inFile;
-#endif
-        panic("Input config file %s could not be parsed, line %d, error: %s", peFile, pe.getLine(), pe.getError());
+// TODO(prosenfeld): move to a utils file or something 
+std::vector<string> split(std::string input, std::string chars)
+{
+    using std::string; 
+    using std::vector;
+
+    vector<string> ret;
+
+    string cur = input;
+
+    size_t pos = 0;
+
+    while (!cur.empty())
+    {
+        pos = cur.find_first_of(chars);
+        string tmp = cur.substr(0, pos);
+        ret.push_back(tmp);
+
+
+        if (pos == string::npos) {
+            cur.erase();
+        } else {
+            cur.erase(0, pos +1);
+        }
     }
+
+    // If not at npos, then there is still an extra empty string at the end.
+    if (pos != string::npos)
+    {
+        ret.push_back("");
+    }
+
+    return ret;
 }
 
-Config::~Config() {
-    delete inCfg;
-    delete outCfg;
+Config::Config(const char* inFile) {
+    std::ifstream is{inFile};
+    is >> inJson;
 }
 
 // Helper function: Add "*"-prefixed vars, which are used by our scripts but not zsim, to outCfg
 // Returns number of copied vars
-static uint32_t copyNonSimVars(libconfig::Setting& s1, libconfig::Setting& s2, std::string prefix) {
+//
+// TODO(prosenfeld): we don't use this functionality, so just leave this
+// function unimplemented; it's reasonably straightforward to implement but
+// I don't care to spend the time on it now 
+static uint32_t copyNonSimVars(json tree1, json tree2, std::string prefix) {
+    warn("Unimplemented optional functionality to copy non sim vars to output config");
+#if 0
     uint32_t copied = 0;
     for (uint32_t i = 0; i < (uint32_t)s1.getLength(); i++) {
         const char* name = s1[i].getName();
@@ -95,12 +111,19 @@ static uint32_t copyNonSimVars(libconfig::Setting& s1, libconfig::Setting& s2, s
         }
     }
     return copied;
+#endif
+    return 0;
 }
 
 // Helper function: Compares two settings recursively, checking for inclusion
 // Returns number of settings without inclusion (given but unused)
-static uint32_t checkIncluded(libconfig::Setting& s1, libconfig::Setting& s2, std::string prefix) {
+//
+// TODO(prosenfeld): this is a nice check to do but don't bother implementing
+// it for now
+static uint32_t checkIncluded(json tree1, json tree2, std::string prefix) {
+    warn("Unimplemented optional functionality to count unused config items");
     uint32_t unused = 0;
+#if 0
     for (uint32_t i = 0; i < (uint32_t)s1.getLength(); i++) {
         const char* name = s1[i].getName();
         if (!s2.exists(name)) {
@@ -110,15 +133,15 @@ static uint32_t checkIncluded(libconfig::Setting& s1, libconfig::Setting& s2, st
             unused += checkIncluded(s1[i], s2[name], prefix + name + ".");
         }
     }
+#endif
     return unused;
 }
 
 
-
 //Called when initialization ends. Writes output config, and emits warnings for unused input settings
 void Config::writeAndClose(const char* outFile, bool strictCheck) {
-    uint32_t nonSimVars = copyNonSimVars(inCfg->getRoot(), outCfg->getRoot(), std::string(""));
-    uint32_t unused = checkIncluded(inCfg->getRoot(), outCfg->getRoot(), std::string(""));
+    uint32_t nonSimVars = copyNonSimVars(inJson, outJson, std::string(""));
+    uint32_t unused = checkIncluded(inJson, outJson, std::string(""));
 
     if (nonSimVars) info("Copied %d non-sim var%s to output config", nonSimVars, (nonSimVars > 1)? "s" : "");
     if (unused) {
@@ -128,34 +151,25 @@ void Config::writeAndClose(const char* outFile, bool strictCheck) {
             warn("%d setting%s not used during configuration", unused, (unused > 1)? "s" : "");
         }
     }
-
-    try {
-        outCfg->writeFile(outFile);
-    } catch (libconfig::FileIOException fioe) {
-        panic("Output config file %s could not be written", outFile);
-    }
+    // TODO(prosenfeld): check if << can throw
+    std::ofstream os{outFile};
+    os << outJson.dump(4);
 }
 
 
 bool Config::exists(const char* key) {
-    return inCfg->exists(key);
+    auto tmp_root = inJson;
+    auto pieces = split(std::string(key), ".");
+    for (const auto &piece : pieces) {
+        if (tmp_root.contains(piece)) {
+            tmp_root = inJson[piece];
+        } else {
+            return false;
+        }
+    }
+    return true;
 }
 
-//Helper functions
-template<typename T> static const char* getTypeName();
-template<> const char* getTypeName<int>() {return "uint32";}
-template<> const char* getTypeName<lc_int64>() {return "uint64";}
-template<> const char* getTypeName<bool>() {return "bool";}
-template<> const char* getTypeName<const char*>() {return "string";}
-template<> const char* getTypeName<double>() {return "double";}
-
-typedef libconfig::Setting::Type SType;
-template<typename T> static SType getSType();
-template<> SType getSType<int>() {return SType::TypeInt;}
-template<> SType getSType<lc_int64>() {return SType::TypeInt64;}
-template<> SType getSType<bool>() {return SType::TypeBoolean;}
-template<> SType getSType<const char*>() {return SType::TypeString;}
-template<> SType getSType<double>() {return SType::TypeFloat;}
 
 template<typename T> static bool getEq(T v1, T v2);
 template<> bool getEq<int>(int v1, int v2) {return v1 == v2;}
@@ -164,94 +178,93 @@ template<> bool getEq<bool>(bool v1, bool v2) {return v1 == v2;}
 template<> bool getEq<const char*>(const char* v1, const char* v2) {return strcmp(v1, v2) == 0;}
 template<> bool getEq<double>(double v1, double v2) {return v1 == v2;}
 
-template<typename T> static void writeVar(libconfig::Setting& setting, const char* key, T val) {
-    //info("writeVal %s", key);
-    const char* sep = strchr(key, '.');
-    if (sep) {
-        assert(*sep == '.');
-        uint32_t plen = (size_t)(sep-key);
-        char prefix[plen+1];
-        strncpy(prefix, key, plen);
-        prefix[plen] = 0;
-        // libconfig strdups all passed strings, so it's fine that prefix is local.
-        if (!setting.exists(prefix)) {
-            try {
-                setting.add((const char*)prefix, SType::TypeGroup);
-            } catch (libconfig::SettingNameException sne) {
-                panic("libconfig error adding group setting %s", prefix);
-            }
+string join(vector<string>::const_iterator start, vector<string>::const_iterator stop, const string &glue) {
+    string output;
+    for (vector<string>::const_iterator it = start; it != stop; ++it) {
+        if (!glue.empty() && it != start) {
+            output += glue;
         }
-        libconfig::Setting& child = setting[(const char*)prefix];
-        writeVar(child, sep+1, val);
-    } else {
-        if (!setting.exists(key)) {
-            try {
-                setting.add(key, getSType<T>()) = val;
-            } catch (libconfig::SettingNameException sne) {
-                panic("libconfig error adding leaf setting %s", key);
-            }
-        } else {
-            //If this panics, what the hell are you doing in the code? Multiple reads and different defaults??
-            T origVal = setting[key];
-            if (!getEq(val, origVal)) panic("Duplicate writes to out config key %s with different values!", key);
-        }
+        output += *it;
     }
+    return output;
 }
 
-template<typename T> static void writeVar(libconfig::Config* cfg, const char* key, T val) {
-    libconfig::Setting& setting = cfg->getRoot();
-    writeVar(setting, key, val);
-}
+template<typename T> static void writeVar(json *curr_node, const char* key, T val) {
+    auto pieces = split(key, ".");
+    auto this_key = pieces[0];
+    auto leaf = pieces.back();
 
+    // Base case - only one piece left in the path so just set the value 
+    if (pieces.size() == 1) {
+        (*curr_node)[leaf] = val;
+        return;
+    }
+
+    // Special case - middle of a path through the tree needs to be created
+    if (curr_node->is_null()) {
+        (*curr_node)[this_key] = json();
+    }
+
+    // Recursive case -- continue down the tree 
+    auto next_key = join(pieces.begin()+1, pieces.end(), string("."));
+    writeVar(&(*curr_node)[this_key], next_key.c_str(), val);
+}
 
 template<typename T>
 T Config::genericGet(const char* key, T def) {
     T val;
-    if (inCfg->exists(key)) {
-        if (!inCfg->lookupValue(key, val)) {
-            panic("Type error on optional setting %s, expected type %s", key, getTypeName<T>());
+    auto tmp_root = inJson;
+    auto pieces = split(std::string(key), ".");
+    for (const auto &piece : pieces) {
+        if (tmp_root.contains(piece)) {
+            tmp_root = tmp_root[piece];
+        } else {
+            val = def;
+            goto out;
         }
-    } else {
-        val = def;
     }
-    writeVar(outCfg, key, val);
+    val = tmp_root.get<T>();
+out:
+    writeVar(&outJson, key, val);
     return val;
 }
 
 template<typename T>
 T Config::genericGet(const char* key) {
-    T val;
-    if (inCfg->exists(key)) {
-        if (!inCfg->lookupValue(key, val)) {
-            panic("Type error on mandatory setting %s, expected type %s", key, getTypeName<T>());
-        }
-    } else {
-        panic("Mandatory setting %s (%s) not found", key, getTypeName<T>())
-    }
-    writeVar(outCfg, key, val);
-    return val;
+    return genericGet<T>(key, T());
 }
+
+// TODO(prosenfeld): I think these specializations are unnecessary now -- it
+// seems like they were primarily here to do type conversions from libconfig
+// but I don't think we need that with the JSON library
 
 //Template specializations for access interface
 template<> uint32_t Config::get<uint32_t>(const char* key) {return (uint32_t) genericGet<int>(key);}
 template<> uint64_t Config::get<uint64_t>(const char* key) {return (uint64_t) genericGet<lc_int64>(key);}
 template<> bool Config::get<bool>(const char* key) {return genericGet<bool>(key);}
-template<> const char* Config::get<const char*>(const char* key) {return genericGet<const char*>(key);}
+template<> std::string Config::get<std::string>(const char* key) {return genericGet<std::string>(key);}
 template<> double Config::get<double>(const char* key) {return (double) genericGet<double>(key);}
+template<> const char* Config::get<const char *>(const char* key) {return genericGet<std::string>(key).c_str();}
 
 template<> uint32_t Config::get<uint32_t>(const char* key, uint32_t def) {return (uint32_t) genericGet<int>(key, (int)def);}
 template<> uint64_t Config::get<uint64_t>(const char* key, uint64_t def) {return (uint64_t) genericGet<lc_int64>(key, (lc_int64)def);}
 template<> bool Config::get<bool>(const char* key, bool def) {return genericGet<bool>(key, def);}
-template<> const char* Config::get<const char*>(const char* key, const char* def) {return genericGet<const char*>(key, def);}
+template<> std::string Config::get<std::string>(const char* key, std::string def) {return genericGet<std::string>(key, def);}
 template<> double Config::get<double>(const char* key, double def) {return (double) genericGet<double>(key, (double)def);}
+template<> const char* Config::get<const char *>(const char* key, const char *def) {return genericGet<std::string>(key, std::string(def)).c_str();}
+
 
 //Get subgroups in a specific key
 void Config::subgroups(const char* key, std::vector<const char*>& grps) {
-    if (inCfg->exists(key)) {
-        libconfig::Setting& s = inCfg->lookup(key);
-        uint32_t n = s.getLength(); //0 if not a group or list
-        for (uint32_t i = 0; i < n; i++) {
-            if (s[i].isGroup()) grps.push_back(s[i].getName());
+    // TODO(prosenfeld): this probably needs a lot of error handling code
+    auto json_tmp = inJson;
+    auto pieces = split(std::string(key), ".");
+    for (const auto &piece : pieces) {
+        json_tmp = json_tmp[piece];
+    }
+    if (json_tmp.is_object()) {
+        for (const auto &elem : json_tmp.items()) {
+            grps.push_back(elem.key().c_str());
         }
     }
 }

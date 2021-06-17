@@ -26,31 +26,23 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
-/* Thin wrapper around libconfig to:
- * - Reduce and simplify init code (tailored interface, not type BS, ...)
- * - Strict config: type errors, warnings on unused variables, panic on different defaults
- * - Produce a full configuration file with all the variables, including defaults (for config parsing, comparison, etc.)
- */
-
 #include <stdint.h>
 #include <string>
 #include <vector>
 #include "log.h"
-
-namespace libconfig {
-    class Config;
-    class Setting;
-};
+#include "nlohmann/json.hpp"
 
 
 class Config {
+    using json = nlohmann::json;
     private:
-        libconfig::Config* inCfg;
-        libconfig::Config* outCfg;
+
+        json inJson;
+        json outJson;
 
     public:
         explicit Config(const char* inFile);
-        ~Config();
+        ~Config() = default;
 
         //Called when initialization ends. Writes output config, and emits warnings for unused input settings
         void writeAndClose(const char* outFile, bool strictCheck);

@@ -1,3 +1,40 @@
+About this Fork
+=====================
+This zsim fork is intended to be a simplified and slightly modernized version
+of zsim that is easier to get started with. Additionally, it may be a good
+target for integrating with Pin3.x.
+
+Features: 
+-----------
+* Intel Pin is the only external dependency. All other libraries are
+  "header-only" and thus built internally. gcc >= 4.6 is still required for
+  C++11 support (such as `auto` and such). There was an ABI break with gcc 5.x
+  so while it may be possible to compile with newer versions of the compiler,
+  it will probably result in subtle errors unless you really know what you're
+  doing. If possible, my advice is to stick to gcc 4.x.
+
+* SCons build system replaced by CMake. CMake is industry-standard these days.
+* libconfig configuration replaced by JSON configuration. JSON is
+  industry-standard these days.
+* One possible use-case of this version is as a starting point for zsim
+  integration with Pin3.x. Pin3.x requires all Pintools to be build against
+  PinCRT and so each extra external library that is linked to zsim must also be
+  built against PinCRT. It is my opinion that this represents a non-trivial
+  complication in the Pin3.x integration and testing process.
+
+Missing Features/Limitations:
+--------------------
+* Removing HDF5 dependency means no more HDF5 stats or tracing. 
+* Removing gelf dependency means no more debug harness support. 
+* Removing zlib dependency means no more address tracing support.
+* Some unimplemented checks when copying input config to output config files.
+* No more support for DRAMSim2.
+* No built-in support for PGO builds.
+
+Note that these removals are not necessarily permanent; they are merely a
+temporary convenience to test integration with Pin3.x. Some of these features
+can be added back in easily later. Others need testing with PinCRT in Pin3.x.
+
 zsim
 ====
 
@@ -44,56 +81,26 @@ software, and that you send us a citation of your work.
 Setup
 -----
 
-External dependencies: `gcc >=4.6, pin, scons, libconfig, libhdf5, libelfg0`
+External dependencies: `gcc >=4.6, pin 2.14, cmake 3.13 or higher`
 
 **Natively:** If you use a relatively recent Linux distribution:
 
 1. Clone a fresh copy of the git zsim repository (`git clone <path to zsim repo>`).
 
-2. Download Pin, http://www.pintool.org . Tested with Pin 2.8+ on an x86-64
-   architecture. Compiler flags are set up for Pin 2.9 on x86-64. To get flags
-   for other versions, examine the Pin makefile or derive from sample pintools.
-   Set the PINPATH environment variable to Pin's base directory.
+2. Download Pin, http://www.pintool.org . Tested with Pin 2.14. Set `$PINPATH`
+   to point to where you unpacked your Pin package. 
 
-   NOTE: Linux 3.0+ systems require Pin 2.10+, just because Pin does a kernel
-   version check that 3.0 fails. Use Pin 2.12 with Sandy/Ivy Bridge systems,
-   earlier Pin versions have strange performance regressions on this machine
-   (extremely low IPC).
+   NOTE: Because most modern Linux kernels fail the Pin 2.14 version check, the
+   `-ifeellucky` flag has been permanently added in `pin_cmd.cpp` to skip the
+   Pin version check. This may or may not backfire for your use-case. 
 
-3. zsim requires some additional libraries. If they are not installed in your
-   system, you will need to download and build them:
-
-  3.1 libconfig, http://www.hyperrealm.com/libconfig. You may use the system's
-      package if it's recent enough, or build your own. To install locally, untar,
-      run `./configure --prefix=<libconfig install path> && make install`.  Then
-      define the env var `LIBCONFIGPATH=<libconfig install path>`.
-
-  3.2 libhdf5, http://www.hdfgroup.org (v1.8.4 path 1 or higher), and libelfg0.
-      The SConstruct file assumes these are installed in the system.
-
-  3.3 (OPTIONAL) polarssl (currently used just for their SHA-1 hash function),
-      http://www.polarssl.org Install locally as in 3.1 and define the env var
-      `POLARSSLPATH=<polarssl install path>`.
-      
-      NOTE: You may need to add `-fPIC` to the Makefile's C(PP/XX)FLAGS depending
-      on the version.
-
-  3.4 (OPTIONAL) DRAMSim2 for main memory simulation. Build locally and define
-      the env var DRAMSIMPATH as in 3.1 and 3.3.
-
-4. In some distributions you may need to make minor changes to the host
+3. In some distributions you may need to make minor changes to the host
    configuration to support large shmem segments and ptrace. See the notes
    below for more details.
 
-5. Compile zsim: `scons -j16`
+4. Compile zsim: `mkdir build; cd build; cmake ..; make`.
 
-6. Launch a test run: `./build/opt/zsim tests/simple.cfg`
-
-For more compilation options, run scons --help. You can build debug, optimized
-and release variants of the simulator (--d, --o, --r options). Optimized (opt)
-is the default. You can build profile-guided optimized (PGO) versions of the
-code with --p. These improve simulation performance with OOO cores by about
-30%.
+5. Launch a test run: `./zsim tests/simple.cfg`
 
 NOTE: zsim uses C++11 features available in `gcc >=4.6` (such as range-based for
 loops, strictly typed enums, lambdas, and type inference). Older version of gcc
@@ -190,9 +197,7 @@ distributions. Using it in OSs other than Linux (e.g,, OS X, Windows) will be
 non-trivial, since the user-level virtualization subsystem has deep ties into
 the Linux syscall interface.
 
-**Stats:** The simulator outputs periodic, eventual and end-of-sim stats files.
-Stats can be output in both HDF5 and plain text. Read the README.stats file
-and the associated scripts repository to see how to use these stats.
+**Stats:** Only the plain text stats are now supported.
 
 **Configuration & Getting Started:** A detailed use guide is out of the scope of
 this README, because the simulator options change fairly often. In general,
@@ -207,7 +212,7 @@ well when getting started:
    parameters, e.g., how frequent are periodic stats output, phase length, etc.),
    and process{0, 1, 2, ...} entries (what processes to run). 
 
-2. Most parameters have implicit defaults. zsim produces an out.cfg file that
+2. Most parameters have implicit defaults. zsim produces an out.json file that
    includes all the default choices (and we recommend that your analysis scripts
    automatically parse this file to check that what you are simulating makes
    sense). Inspecting the out.cfg file reveals more configuration options to play

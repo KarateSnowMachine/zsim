@@ -1,0 +1,4 @@
+#define PIN_PATH "${PIN_PATH}"
+#define ZSIM_PATH "${ZSIM_PATH}"
+#define ZSIM_BUILDVERSION "TODO"
+#define ZSIM_BUILDDATE "TODO"

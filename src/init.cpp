@@ -791,12 +791,14 @@ static void PostInitStats(bool perProcessDir, Config& config) {
     pathStr += "/";
 
     // Absolute paths for stats files. Note these must be in the global heap.
-    const char* pStatsFile = gm_strdup((pathStr + "zsim.h5").c_str());
-    const char* evStatsFile = gm_strdup((pathStr + "zsim-ev.h5").c_str());
-    const char* cmpStatsFile = gm_strdup((pathStr + "zsim-cmp.h5").c_str());
+    //const char* pStatsFile = gm_strdup((pathStr + "zsim.h5").c_str());
+    //const char* evStatsFile = gm_strdup((pathStr + "zsim-ev.h5").c_str());
+    //const char* cmpStatsFile = gm_strdup((pathStr + "zsim-cmp.h5").c_str());
     const char* statsFile = gm_strdup((pathStr + "zsim.out").c_str());
 
     if (zinfo->statsPhaseInterval) {
+        warn("This version doesn't support HDF5 so there's no phase stats generated")
+#if 0
         const char* periodicStatsFilter = config.get<const char*>("sim.periodicStatsFilter", "");
         AggregateStat* prStat = (!strlen(periodicStatsFilter))? zinfo->rootStat : FilterStats(zinfo->rootStat, periodicStatsFilter);
         if (!prStat) panic("No stats match sim.periodicStatsFilter regex (%s)! Set interval to 0 to avoid periodic stats", periodicStatsFilter);
@@ -814,10 +816,11 @@ static void PostInitStats(bool perProcessDir, Config& config) {
 
         zinfo->eventQueue->insert(new PeriodicStatsDumpEvent(zinfo->statsPhaseInterval));
         zinfo->statsBackends->push_back(zinfo->periodicStatsBackend);
+#endif
     } else {
         zinfo->periodicStatsBackend = nullptr;
     }
-
+#if 0
     zinfo->eventualStatsBackend = new HDF5Backend(evStatsFile, zinfo->rootStat, (1 << 17) /* 128KB chunks */, zinfo->skipStatsVectors, false /* don't sum regular aggregates*/);
     zinfo->eventualStatsBackend->dump(true); //must have a first sample
     zinfo->statsBackends->push_back(zinfo->eventualStatsBackend);
@@ -840,6 +843,7 @@ static void PostInitStats(bool perProcessDir, Config& config) {
     StatsBackend* textStats = new TextBackend(statsFile, zinfo->rootStat);
     zinfo->statsBackends->push_back(compactStats);
     zinfo->statsBackends->push_back(textStats);
+#endif
 }
 
 static void InitGlobalStats() {
@@ -869,12 +873,18 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
     //NOTE: This should be as early as possible, so that we can attach to the debugger before initialization.
     zinfo->attachDebugger = config.get<bool>("sim.attachDebugger", false);
     zinfo->harnessPid = getppid();
+#ifdef ENABLE_DEBUG_HARNESS
     getLibzsimAddrs(&zinfo->libzsimAddrs);
 
     if (zinfo->attachDebugger) {
         gm_set_secondary_ptr(&zinfo->libzsimAddrs);
         notifyHarnessForDebugger(zinfo->harnessPid);
     }
+#else 
+    if (zinfo->attachDebugger) {
+        panic("This version doesn't support debug harness")
+    }
+#endif
 
     PreInitStats();
 
@@ -1015,7 +1025,7 @@ void SimInit(const char* configFile, const char* outputDir, uint32_t shmid) {
 
     //Write config out
     bool strictConfig = config.get<bool>("sim.strictConfig", true); //if true, panic on unused variables
-    config.writeAndClose((string(zinfo->outputDir) + "/out.cfg").c_str(), strictConfig);
+    config.writeAndClose((string(zinfo->outputDir) + "/out.json").c_str(), strictConfig);
 
     zinfo->contentionSim->postInit();
 

@@ -28,7 +28,6 @@
 
 #include "zsim.h"
 #include <algorithm>
-#include <bits/signum.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <fstream>
@@ -1474,6 +1473,8 @@ int main(int argc, char *argv[]) {
     futex_unlock(&zinfo->ffLock);
     usleep(100000);
 #endif
+
+#ifdef ENABLE_DEBUG_HARNESS
     //LibzsimAddrs sanity check: Ensure that they match across processes
     struct LibInfo libzsimAddrs;
     getLibzsimAddrs(&libzsimAddrs);
@@ -1486,7 +1487,11 @@ int main(int argc, char *argv[]) {
     if (!masterProcess && zinfo->attachDebugger) {
         notifyHarnessForDebugger(zinfo->harnessPid);
     }
-
+#else
+    if (!masterProcess && zinfo->attachDebugger) {
+        panic("This version does not support the debugger harness");
+    }
+#endif
     assert((uint32_t)procIdx < zinfo->numProcs);
     procTreeNode = zinfo->procArray[procIdx];
     if (!masterProcess) procTreeNode->notifyStart(); //masterProcess notifyStart is called in init() to avoid races

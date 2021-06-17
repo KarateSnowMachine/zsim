@@ -28,6 +28,7 @@
 
 #include "debug.h"
 
+#ifdef ENABLE_DEBUG_HARNESS
 /* Gather libzsim addresses and initialize a libinfo structure.
  * This is needed to essentially replicate the line that PIN prints when
  * called with pause_tool. It uses libelf, but PIN is linked to it already
@@ -37,5 +38,6 @@ void getLibzsimAddrs(LibInfo* libzsimAddrs);
 
 /* Signal the harness process that we're ready to be debugged */
 void notifyHarnessForDebugger(int harnessPid);
+#endif
 
 #endif  // DEBUG_ZSIM_H_

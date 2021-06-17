@@ -24,6 +24,8 @@
  */
 
 #include "debug_zsim.h"
+
+#ifdef ENABLE_DEBUG_HARNESS
 #include <fcntl.h>
 #include <gelf.h>
 #include <link.h>
@@ -96,3 +98,4 @@ void notifyHarnessForDebugger(int harnessPid) {
     kill(harnessPid, SIGUSR1);
     sleep(1); //this is a bit of a hack, but ensures the debugger catches us
 }
+#endif // ENABLE_DEBUG_HARNESS

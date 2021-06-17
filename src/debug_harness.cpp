@@ -41,6 +41,7 @@
  */
 
 int launchXtermDebugger(int targetPid, LibInfo* libzsimAddrs) {
+#ifdef ENABLE_DEBUG_HARNESS
     int childPid = fork();
     if (childPid == 0) {
         std::string targetPidStr = Str(targetPid);
@@ -59,4 +60,8 @@ int launchXtermDebugger(int targetPid, LibInfo* libzsimAddrs) {
     } else {
         return childPid;
     }
+#else
+    panic("This version doesn't support debug harness");
+    return 0;
+#endif
 }

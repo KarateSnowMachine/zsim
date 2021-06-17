@@ -26,6 +26,7 @@
 #include "access_tracing.h"
 #include "bithacks.h"
 
+#if ENABLE_HDF5
 // Concatenate HDF5 header path prefix with the header file names, because
 // Ubuntu 15.04 and later change the HDF5 header path.
 #define _STR(x) #x
@@ -42,7 +43,11 @@
 
 #define PT_CHUNKSIZE (1024*256u)  // 256K records (~6MB)
 
+#endif
+
 AccessTraceReader::AccessTraceReader(std::string _fname) : fname(_fname.c_str()) {
+    panic("HDF5 not supported in this version");
+#if ENABLE_HDF5
     hid_t fid = H5Fopen(fname.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
     if (fid == H5I_INVALID_HID) panic("Could not open HDF5 file %s", fname.c_str());
 
@@ -76,9 +81,11 @@ AccessTraceReader::AccessTraceReader(std::string _fname) : fname(_fname.c_str())
 
     H5PTclose(table);
     H5Fclose(fid);
+#endif
 }
 
 void AccessTraceReader::nextChunk() {
+#if ENABLE_HDF5
     assert(cur == max);
     curFrameRecord += max;
 
@@ -95,10 +102,13 @@ void AccessTraceReader::nextChunk() {
     } else {
         assert_msg(curFrameRecord == numRecords, "%ld %ld", curFrameRecord, numRecords);  // aaand we're done
     }
+#endif
 }
 
 
 AccessTraceWriter::AccessTraceWriter(g_string _fname, uint32_t numChildren) : fname(_fname) {
+    panic("HDF5 not supported in this version")
+#if ENABLE_HDF5
     // Create record structure
     hid_t accType = H5Tenum_create(H5T_NATIVE_USHORT);
     uint16_t val;
@@ -161,9 +171,11 @@ AccessTraceWriter::AccessTraceWriter(g_string _fname, uint32_t numChildren) : fn
     cur = 0;
     max = PT_CHUNKSIZE;
     assert((uint32_t)(((char*) &buf[1]) - ((char*) &buf[0])) == sizeof(PackedAccessRecord));
+#endif
 }
 
 void AccessTraceWriter::dump(bool cont) {
+#if ENABLE_HDF5
     hid_t fid = H5Fopen(fname.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
     if (fid == H5I_INVALID_HID) panic("Could not open HDF5 file %s", fname.c_str());
     hid_t table = H5PTopen(fid, "accs");
@@ -185,4 +197,5 @@ void AccessTraceWriter::dump(bool cont) {
     cur = 0;
     H5PTclose(table);
     H5Fclose(fid);
+#endif
 }

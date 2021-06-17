@@ -299,8 +299,11 @@ class MemControllerBase : public MemObject {
         uint64_t lastAccesses;
         uint64_t maxBandwidth;
         uint64_t minBandwidth;
-
+#ifdef ENABLE_ADDR_TRACE_LOG
         gzFile addrTraceLog;
+#else
+        void *addrTraceLog;
+#endif
 
         // Power
         uint64_t lastMemCycle;

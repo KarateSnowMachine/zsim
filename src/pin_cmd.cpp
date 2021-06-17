@@ -31,7 +31,7 @@
 #include <string>
 #include <wordexp.h> //for posix-shell command expansion
 #include "config.h"
-#include "pin.H"
+#include "build.h" // generated paths
 
 //Funky macro expansion stuff
 #define QUOTED_(x) #x
@@ -48,10 +48,9 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
         zsimPath = zsimEnvPath;
         zsimPath += "/libzsim.so";
     } else {
-        pinPath = QUOTED(PIN_PATH);
-        zsimPath = QUOTED(ZSIM_PATH);
+        pinPath = PIN_PATH;
+        zsimPath = ZSIM_PATH;
     }
-
     args.push_back(pinPath);
 
     //Global pin options
@@ -60,14 +59,17 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
     args.push_back("1");
 
     //Additional options (e.g., -smc_strict for Java), parsed from config
-    const char* pinOptions = conf->get<const char*>("sim.pinOptions", "");
+    // TODO(prosenfeld): it feels like there has to be a better way
+    const char* pinOptions = strdup(conf->get<std::string>("sim.pinOptions", "").c_str());
     wordexp_t p;
     wordexp(pinOptions, &p, 0);
     for (uint32_t i = 0; i < p.we_wordc; i++) {
         args.push_back(g_string(p.we_wordv[i]));
     }
     wordfree(&p);
-
+    // FIXME(prosenfeld): trying to bring pin.H into this is a touch annoying
+    // -- punt on this since it's a bit of a hack anyways
+#if 0
     if (PIN_PRODUCT_VERSION_MAJOR <= 2 && LINUX_VERSION_CODE >= KERNEL_VERSION(4,0,0)
             && std::find(args.begin(), args.end(), "-injection") == args.end()) {
         // FIXME(mgao): hack to bypass kernel version check in Pin 2.x.
@@ -75,6 +77,9 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
         args.push_back("-injection");
         args.push_back("parent");
     }
+#endif
+    // Skip Pin's compatibility checks 
+    args.push_back("-ifeellucky");
 
     //Load tool
     args.push_back("-t");
@@ -114,14 +119,23 @@ PinCmd::PinCmd(Config* conf, const char* configFile, const char* outputDir, uint
 
         if (!conf->exists(p_ss.str().c_str())) break;
 
-        const char* cmd = conf->get<const char*>(p_ss.str() +  ".command");
-        const char* input = conf->get<const char*>(p_ss.str() +  ".input", "");
-        const char* loader = conf->get<const char*>(p_ss.str() +  ".loader", "");
-        const char* env = conf->get<const char*>(p_ss.str() +  ".env", "");
+        // TODO(prosenfeld): string handling is ugly here
+        const char* cmd = strdup(conf->get<std::string>(p_ss.str() +  ".command", "/bin/ls").c_str());
+        if (strlen(cmd) == 0) panic("got bad for %s", p_ss.str().c_str());
+        const char* input = strdup(conf->get<std::string>(p_ss.str() +  ".input", "").c_str());
+        const char* loader = strdup(conf->get<std::string>(p_ss.str() +  ".loader", "").c_str());
+        const char* env = strdup(conf->get<std::string>(p_ss.str() +  ".env", "").c_str());
 
         ProcCmdInfo pi = {g_string(cmd), g_string(input), g_string(loader), g_string(env)};
         procInfo.push_back(pi);
     }
+    std::ostringstream oss;
+    oss << "pin cmdline is '";
+    for (const auto &arg : args) {
+        oss << arg <<" ";
+    }
+    oss << "'";
+    info("%s", oss.str().c_str());
 }
 
 g_vector<g_string> PinCmd::getPinCmdArgs(uint32_t procIdx) {

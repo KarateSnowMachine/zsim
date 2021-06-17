@@ -1028,10 +1028,14 @@ MemControllerBase::MemControllerBase(g_string _memCfg, uint32_t _cacheLineSize, 
 
     addrTraceLog = nullptr;
     if (mParam->addrTrace == true) {
+#ifdef ENABLE_ADDR_TRACE_LOG
         g_string gzFileName = g_string("ZsimMemAddrTrace_") + name.c_str() + ".gz";
         addrTraceLog = gzopen(gzFileName.c_str(), "wb1");
         if (addrTraceLog == nullptr)
             panic("Fail to open file %s for addrTraceLog.", gzFileName.c_str());
+#else
+        panic("This version doesn't support address trace log")
+#endif
     }
 }
 
@@ -1229,9 +1233,10 @@ void MemControllerBase::finish(void) {
     EstimatePowers(endCycle, true);
     EstimateBandwidth(realTime, lastRealTime, true);
     UpdateCmdCounters();
-
+#ifdef ENABLE_ADDR_TRACE_LOG
     if (addrTraceLog != nullptr)
         gzclose(addrTraceLog);
+#endif
 }
 
 // See also MemChannelBase::AddressMap
@@ -1291,8 +1296,10 @@ uint64_t MemControllerBase::LatencySimulate(Address lineAddr, uint64_t sysCycle,
     uint32_t bin = std::min(sysLatency/lhBinSize, (uint64_t)(lhNumBins-1));
     latencyHist.inc(bin);
 
+#ifdef ENABLE_ADDR_TRACE_LOG
     if (addrTraceLog != nullptr)
         gzwrite(addrTraceLog, (char*)&lineAddr, sizeof(uint64_t));
+#endif
 
     if (type == WRITE) {
         profWrites.atomicInc();
